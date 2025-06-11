@@ -6,27 +6,53 @@ interface AuthRequest extends Request {
   user?: { userId: number; email: string };
 }
 
-export const getTasks = async (req: AuthRequest, res: Response) => {
-  const userId = req.user?.userId;
+export const getTasks = async (req: Request, res: Response): Promise<void> => {
+  const userId = (req as any).user?.userId;
+  const { completed, page = '1', limit = '10' } = req.query;
 
-  const tasks = await prisma.task.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
+  const take = parseInt(limit as string);
+  const skip = (parseInt(page as string) - 1) * take;
+
+  const filters: any = {
+    userId,
+  };
+
+  if (completed !== undefined) {
+    filters.completed = completed === 'true';
+  }
+
+  const [tasks, total] = await Promise.all([
+    prisma.task.findMany({
+      where: filters,
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.task.count({ where: filters }),
+  ]);
+
+  res.json({
+    tasks,
+    meta: {
+      total,
+      page: parseInt(page as string),
+      limit: take,
+      totalPages: Math.ceil(total / take),
+    },
   });
-
-  res.json(tasks);
 };
 
 const createTaskSchema = z.object({
   title: z.string().min(1, 'O título é obrigatório'),
 });
 
-export const createTask = async (req: Request, res: Response) => {
+export const createTask = async (req: Request, res: Response): Promise<void> => {
   const parse = createTaskSchema.safeParse(req.body);
   const userId = (req as any).user?.userId;
 
   if (!parse.success) {
-    return res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    return
   }
 
   const { title } = parse.data;
@@ -38,7 +64,7 @@ export const createTask = async (req: Request, res: Response) => {
     },
   });
 
-  return res.status(201).json(task);
+  res.status(201).json(task);
 };
 
 const updateTaskSchema = z.object({
@@ -46,13 +72,14 @@ const updateTaskSchema = z.object({
   completed: z.boolean().optional(),
 });
 
-export const updateTask = async (req: Request, res: Response) => {
+export const updateTask = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const userId = (req as any).user?.userId;
   const parse = updateTaskSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    return
   }
 
   const task = await prisma.task.findUnique({
@@ -60,7 +87,8 @@ export const updateTask = async (req: Request, res: Response) => {
   });
 
   if (!task || task.userId !== userId) {
-    return res.status(404).json({ error: 'Tarefa não encontrada ou acesso negado' });
+    res.status(404).json({ error: 'Tarefa não encontrada ou acesso negado' });
+    return
   }
 
   const updated = await prisma.task.update({
@@ -68,10 +96,10 @@ export const updateTask = async (req: Request, res: Response) => {
     data: parse.data,
   });
 
-  return res.json(updated);
+  res.json(updated);
 };
 
-export const deleteTask = async (req: Request, res: Response) => {
+export const deleteTask = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const userId = (req as any).user?.userId;
 
@@ -80,12 +108,13 @@ export const deleteTask = async (req: Request, res: Response) => {
   });
 
   if (!task || task.userId !== userId) {
-    return res.status(404).json({ error: 'Tarefa não encontrada ou acesso negado' });
+    res.status(404).json({ error: 'Tarefa não encontrada ou acesso negado' });
+    return
   }
 
   const updated = await prisma.task.delete({
     where: { id: task.id }
   });
 
-  return res.status(204).send();
+  res.status(204).send();
 }

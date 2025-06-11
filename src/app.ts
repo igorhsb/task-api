@@ -4,7 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import prisma from './prisma/client';
 import authRoutes from './routes/auth.routes';
-import { authMiddleware } from './middlewares/auth.middleware';
+import { authMiddleware, AuthRequest } from './middlewares/auth.middleware';
 import taskRoutes from './routes/task.routes';
 
 dotenv.config();
@@ -21,8 +21,8 @@ app.get('/users', async (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/tasks', taskRoutes);
-app.use('/private', authMiddleware, (req, res) => {
-  res.json({message : 'Rota protegida!'})
+app.use('/private', authMiddleware, (req: AuthRequest, res) => {
+  res.json({ user: req.user });
 });
 
 export default app;

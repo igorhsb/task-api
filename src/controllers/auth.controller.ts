@@ -15,11 +15,12 @@ const inputSchema = z.object({
   password: z.string().min(6, 'Senha deve ter pelo menos 6 carcateres')
 });
 
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response): Promise<void> => {
   const parse = registerSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    return
   }
 
   const { email, password } = parse.data;
@@ -28,7 +29,8 @@ export const register = async (req: Request, res: Response) => {
   const existingUser = await prisma.user.findUnique({ where: { email } });
 
   if (existingUser) {
-    return res.status(409).json({ error: 'Email já está em uso' });
+    res.status(409).json({ error: 'Email já está em uso' });
+    return
   }
 
   // Hash da senha
@@ -41,7 +43,7 @@ export const register = async (req: Request, res: Response) => {
     },
   });
 
-  return res.status(201).json({ message: 'Usuário criado com sucesso!', user: { id: user.id, email: user.email } });
+  res.status(201).json({ message: 'Usuário criado com sucesso!', user: { id: user.id, email: user.email } });
 };
 
 
@@ -50,11 +52,12 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-export const login = async (req: Request, res: Response) => {
+export const generateToken = async (req: Request, res: Response): Promise<void> => {
   const parse = loginSchema.safeParse(req.body);
 
   if (!parse.success) {
-    return res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    res.status(400).json({ errors: parse.error.flatten().fieldErrors });
+    return
   }
 
   const { email, password } = parse.data;
@@ -62,13 +65,15 @@ export const login = async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
-    return res.status(401).json({ error: 'Credenciais inválidas' });
+    res.status(401).json({ error: 'Credenciais inválidas' });
+    return
   }
 
   const validPassword = await bcrypt.compare(password, user.password);
 
   if (!validPassword) {
-    return res.status(401).json({ error: 'Credenciais inválidas' });
+    res.status(401).json({ error: 'Credenciais inválidas' });
+    return
   }
   
   const token = jwt.sign(
@@ -77,5 +82,5 @@ export const login = async (req: Request, res: Response) => {
     { expiresIn: '1h' }
   );
 
-  return res.json({ token });
+  res.json({ token });
 };
